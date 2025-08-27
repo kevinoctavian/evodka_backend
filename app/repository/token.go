@@ -1,7 +1,11 @@
 package repository
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+
 	"github.com/kevinoctavian/evodka_backend/app/model"
+	"github.com/kevinoctavian/evodka_backend/pkg/utils"
 	"github.com/kevinoctavian/evodka_backend/platform/database"
 )
 
@@ -10,7 +14,7 @@ type TokenRepository interface {
 	GetByPublicID(publicID string) (*model.RefreshToken, error)
 	FindByToken(token string) (*model.RefreshToken, error)
 	Update(token *model.RefreshToken) error
-	Delete(id int64) error
+	DeleteByToken(token string) error
 	Exists(publicID string) (bool, error)
 }
 
@@ -20,17 +24,21 @@ type TokenRepo struct {
 
 // FindByToken implements TokenRepository.
 func (t *TokenRepo) FindByToken(token string) (*model.RefreshToken, error) {
-	query := `SELECT * FROM refresh_tokens WHERE token = $1`
+	tokenHash := sha256.Sum256([]byte(token))
+	tokenHashString := hex.EncodeToString(tokenHash[:])
+
+	query := `SELECT * FROM refresh_tokens WHERE token_hash = $1`
 	var refreshToken model.RefreshToken
-	err := t.db.QueryRow(query, token).Scan(
+	err := t.db.QueryRow(query, tokenHashString).Scan(
 		&refreshToken.ID,
 		&refreshToken.UserID,
 		&refreshToken.Token,
 		&refreshToken.DeviceName,
 		&refreshToken.IPAddress,
+		&refreshToken.UserAgent,
 		&refreshToken.ExpiresAt,
 		&refreshToken.CreatedAt,
-		&refreshToken.UpdatedAt,
+		&refreshToken.Revoked,
 	)
 	if err != nil {
 		return nil, err
@@ -40,36 +48,54 @@ func (t *TokenRepo) FindByToken(token string) (*model.RefreshToken, error) {
 
 // Create implements TokenRepository.
 func (t *TokenRepo) Create(token *model.RefreshToken) error {
+	id, err := utils.NewULID()
+	if err != nil {
+		return err
+	}
+
 	query := `INSERT INTO refresh_tokens (
-	user_public_id, 
-	token,
-	device_name,
-	ip_address,
-	expires_at,
-	created_at, 
-	updated_at
-	) VALUES ($1, $2, $3, $4, $5, NOW(), NOW()) RETURNING id`
+		id,
+		user_id, 
+		token_hash,
+		device_name,
+		ip_address,
+		user_agent,
+		expires_at
+	) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`
 
 	if len(token.DeviceName) > 100 {
 		token.DeviceName = token.DeviceName[:100] // Truncate to 100 characters
 	}
 
-	err := t.db.QueryRow(query, token.UserID, token.Token, token.DeviceName, token.IPAddress, token.ExpiresAt).Scan(&token.ID)
+	tokenHash := sha256.Sum256([]byte(token.Token))
+	token.Token = hex.EncodeToString(tokenHash[:])
+
+	err = t.db.QueryRow(
+		query,
+		id.String(),
+		token.UserID,
+		token.Token,
+		token.DeviceName,
+		token.IPAddress,
+		token.UserAgent,
+		token.ExpiresAt,
+	).Scan(&token.ID)
 	if err != nil {
 		return err
 	}
-	token.CreatedAt = token.UpdatedAt // Set CreatedAt to now since we just created it
 	return nil
 }
 
 // Delete implements TokenRepository.
-func (t *TokenRepo) Delete(id int64) error {
-	panic("unimplemented")
+func (t *TokenRepo) DeleteByToken(token string) error {
+	query := `DELETE FROM refresh_tokens WHERE token_hash = $1`
+	_, err := t.db.Exec(query, token)
+	return err
 }
 
 // Exists implements TokenRepository.
 func (t *TokenRepo) Exists(publicID string) (bool, error) {
-	query := `SELECT EXISTS (SELECT 1 FROM refresh_tokens WHERE public_id = $1)`
+	query := `SELECT EXISTS (SELECT 1 FROM refresh_tokens WHERE user_id = $1)`
 	var exists bool
 	err := t.db.QueryRow(query, publicID).Scan(&exists)
 	if err != nil {
@@ -80,24 +106,42 @@ func (t *TokenRepo) Exists(publicID string) (bool, error) {
 
 // GetByPublicID implements TokenRepository.
 func (t *TokenRepo) GetByPublicID(publicID string) (*model.RefreshToken, error) {
-	panic("unimplemented")
+	query := `SELECT * FROM refresh_tokens WHERE user_id = $1`
+	var refreshToken model.RefreshToken
+	err := t.db.QueryRow(query, publicID).Scan(
+		&refreshToken.ID,
+		&refreshToken.UserID,
+		&refreshToken.Token,
+		&refreshToken.DeviceName,
+		&refreshToken.IPAddress,
+		&refreshToken.UserAgent,
+		&refreshToken.ExpiresAt,
+		&refreshToken.CreatedAt,
+		&refreshToken.Revoked,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &refreshToken, nil
 }
 
 // Update implements TokenRepository.
 func (t *TokenRepo) Update(token *model.RefreshToken) error {
 	query := `UPDATE refresh_tokens SET 
-		token = $1, 
+		token_hash = $1,
 		device_name = $2, 
-		ip_address = $3, 
-		expires_at = $4, 
-		updated_at = NOW() 
-		WHERE id = $5`
+		ip_address = $3,
+		expires_at = $4
+		WHERE user_id = $5`
 
 	if len(token.DeviceName) > 100 {
 		token.DeviceName = token.DeviceName[:100] // Truncate to 100 characters
 	}
 
-	_, err := t.db.Exec(query, token.Token, token.DeviceName, token.IPAddress, token.ExpiresAt, token.ID)
+	tokenHash := sha256.Sum256([]byte(token.Token))
+	token.Token = hex.EncodeToString(tokenHash[:])
+
+	_, err := t.db.Exec(query, token.Token, token.DeviceName, token.IPAddress, token.ExpiresAt, token.UserID)
 	return err
 }
 

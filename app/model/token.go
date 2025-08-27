@@ -2,26 +2,16 @@ package model
 
 import (
 	"time"
-
-	"github.com/google/uuid"
 )
 
 type RefreshToken struct {
-	ID         int64     `db:"id"`
-	UserID     uuid.UUID `db:"user_public_id"`
-	Token      string    `db:"token"` // hashed
+	ID         string    `db:"id"`
+	UserID     string    `db:"user_id"`
+	Token      string    `db:"token_hash"` // hashed
 	DeviceName string    `db:"device_name"`
 	IPAddress  string    `db:"ip_address"`
+	UserAgent  string    `db:"user_agent"`
 	ExpiresAt  time.Time `db:"expires_at"`
 	CreatedAt  time.Time `db:"created_at"`
-	UpdatedAt  time.Time `db:"updated_at"`
+	Revoked    bool      `db:"revoked"`
 }
-
-// id BIGSERIAL PRIMARY KEY,
-// user_public_id UUID NOT NULL, -- untuk referensi publik
-// token TEXT NOT NULL, -- refresh token yang di-hash (bukan raw token)
-// device_name VARCHAR(100), -- nama device misalnya: "Chrome on Windows"
-// ip_address VARCHAR(45),   -- IPv4/IPv6 address
-// expires_at TIMESTAMPTZ NOT NULL,
-// created_at TIMESTAMPTZ DEFAULT now(),
-// updated_at TIMESTAMPTZ DEFAULT now(),

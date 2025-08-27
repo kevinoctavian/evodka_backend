@@ -10,7 +10,7 @@ import (
 func FiberMiddleware(app *fiber.App) {
 	// Register the logger middleware
 	app.Use(
-		cors.New(),
+		cors.New(cors.ConfigDefault),
 		logger.New(),
 	)
 }

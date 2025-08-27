@@ -7,7 +7,7 @@ import (
 )
 
 func PrivateRoutes(app *fiber.App) {
-	route := app.Group("/api/v1", middleware.JWTProtected())
+	route := app.Group("/api/v1")
 
 	// Elections router
 	electionsRoute := route.Group("/elections")
@@ -27,7 +27,12 @@ func PrivateRoutes(app *fiber.App) {
 	voterRoute.Delete("/:id", controller.DeleteVoter)
 
 	// users router
-	route.Get("/users", controller.GetUsers)
-	route.Put("/users/:id", controller.UpdateUser)
-	route.Delete("/users/:id", controller.DeleteUser)
+	userRoute := route.Group("/users")
+	userRoute.Get("/", controller.GetUsers)
+	userRoute.Put("/:id", controller.UpdateUser)
+	userRoute.Delete("/:id", controller.DeleteUser)
+
+	// schools router
+	schoolRoute := app.Group("/api/v1/schools")
+	schoolRoute.Post("/", controller.CreateSchool)
 }

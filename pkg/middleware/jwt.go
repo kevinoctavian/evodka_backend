@@ -12,6 +12,8 @@ func JWTProtected() fiber.Handler {
 		SigningKey:    []byte(config.AppCfg().JWTAccessKey),
 		ErrorHandler:  jwtError,
 		SigningMethod: jwt.SigningMethodHS512.Name,
+		TokenLookup:   "header:Authorization",
+		AuthScheme:    "Bearer",
 	}
 
 	return jwtware.New(jwtwareConfig)

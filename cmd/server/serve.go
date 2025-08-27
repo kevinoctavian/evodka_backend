@@ -31,6 +31,7 @@ func Serve() {
 	middleware.FiberMiddleware(app) // Use the Logger middleware
 	router.PublicRoutes(app)        // Set up the routes
 	router.PrivateRoutes(app)       // Set up the private routes with JWT protection
+	router.WebSocketRoutes(app)     // Set up WebSocket routes
 
 	// signal channel to capture system calls
 	sigCh := make(chan os.Signal, 1)

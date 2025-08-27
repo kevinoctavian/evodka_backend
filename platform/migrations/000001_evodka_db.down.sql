@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS votes;
+DROP TABLE IF EXISTS elections;
+DROP TABLE IF EXISTS candidates;
+DROP TABLE IF EXISTS refresh_tokens;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS schools;
+
+DROP TYPE IF EXISTS school_type;
+DROP TYPE IF EXISTS user_role;

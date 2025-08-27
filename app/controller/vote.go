@@ -18,15 +18,6 @@ func GetVoters(c *fiber.Ctx) error {
 	})
 }
 
-func UpdateVoter(c *fiber.Ctx) error {
-	// Logic to update an Voter
-	id := c.Params("id")
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"msg": "Voter updated successfully",
-		"id":  id,
-	})
-}
-
 func DeleteVoter(c *fiber.Ctx) error {
 	// Logic to delete an Voter
 	id := c.Params("id")

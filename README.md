@@ -1,6 +1,6 @@
 # Evodka Backend REST API
 
-Proyek ini adalah backend REST API untuk aplikasi Evodka. API ini menyediakan berbagai endpoint untuk mengelola data aplikasi secara efisien dan aman.
+Proyek ini adalah backend REST API untuk aplikasi Evodka.
 
 ## Teknologi yang Digunakan
 

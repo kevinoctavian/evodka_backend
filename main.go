@@ -6,9 +6,9 @@ import (
 )
 
 func main() {
-
+	// load all configs from .env
 	config.LoadAllConfigs(".env")
 
+	// serve the server
 	server.Serve()
-
 }

@@ -6,7 +6,6 @@ import (
 
 	"github.com/form3tech-oss/jwt-go"
 	"github.com/gofiber/fiber/v2"
-	"github.com/google/uuid"
 	"github.com/kevinoctavian/evodka_backend/app/model"
 	"github.com/kevinoctavian/evodka_backend/app/repository"
 	"github.com/kevinoctavian/evodka_backend/pkg/config"
@@ -16,7 +15,7 @@ import (
 )
 
 func Register(c *fiber.Ctx) error {
-	user := &model.CreateUser{Role: "user"} // Default role is "user"
+	user := &model.CreateUser{Role: "User"} // Default role is "user"
 	// Parse the request body into the user model
 	if err := c.BodyParser(user); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -62,7 +61,7 @@ func Register(c *fiber.Ctx) error {
 
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"msg": "Failed to create user",
+			"msg": "Failed to create user " + err.Error(),
 		})
 	}
 
@@ -135,17 +134,33 @@ func Login(c *fiber.Ctx) error {
 	// Save the refresh token in the database
 	tokenRepo := repository.NewTokenRepo(database.GetDB())
 	refreshTokenModel := &model.RefreshToken{
-		UserID:     existingUser.PublicID,
-		Token:      refreshToken,
-		DeviceName: string(c.Request().Header.Peek("User-Agent")),
-		IPAddress:  c.IP(),
-		ExpiresAt:  jwt.TimeFunc().Add(time.Duration(config.AppCfg().JWTRefreshKeyExpireHourCount) * time.Hour),
+		UserID:    existingUser.ID,
+		Token:     refreshToken,
+		UserAgent: string(c.Request().Header.Peek("User-Agent")),
+		IPAddress: c.IP(),
+		ExpiresAt: jwt.TimeFunc().Add(time.Duration(config.AppCfg().JWTRefreshKeyExpireHourCount) * time.Hour),
 	}
 
-	if err := tokenRepo.Create(refreshTokenModel); err != nil {
+	exists, err := tokenRepo.Exists(existingUser.ID)
+	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"msg": "Failed to save refresh token",
+			"msg": "Failed to check if refresh token exists " + err.Error(),
 		})
+	}
+
+	if exists {
+		err := tokenRepo.Update(refreshTokenModel)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"msg": "Failed to update refresh token " + err.Error(),
+			})
+		}
+	} else {
+		if err := tokenRepo.Create(refreshTokenModel); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"msg": "Failed to save refresh token ",
+			})
+		}
 	}
 
 	return c.JSON(fiber.Map{
@@ -155,6 +170,17 @@ func Login(c *fiber.Ctx) error {
 }
 
 func Logout(c *fiber.Ctx) error {
+	tokenRepo := repository.NewTokenRepo(database.GetDB())
+	refreshToken := c.Cookies("refresh_token")
+	if refreshToken != "" {
+		err := tokenRepo.DeleteByToken(refreshToken)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"msg": "Failed to delete refresh token",
+			})
+		}
+	}
+
 	c.Cookie(&fiber.Cookie{
 		Name:     "refresh_token",
 		Value:    "",
@@ -162,6 +188,7 @@ func Logout(c *fiber.Ctx) error {
 		Secure:   !config.AppCfg().Debug,
 		Expires:  jwt.TimeFunc().Add(-time.Hour), // Set to a past time to invalidate the cookie
 	})
+
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"msg": "Logout successful",
 	})
@@ -197,7 +224,7 @@ func RefreshToken(c *fiber.Ctx) error {
 
 	userID := claims["sub"].(string)
 	userRepo := repository.NewUserRepo(database.GetDB())
-	user, err := userRepo.FindByID([16]byte(uuid.MustParse(userID)))
+	user, err := userRepo.FindByID(userID)
 	if err != nil || user == nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"msg": "User not found",
@@ -228,12 +255,11 @@ func RefreshToken(c *fiber.Ctx) error {
 
 	err = tokenRepo.Update(&model.RefreshToken{
 		ID:         refreshTokenModel.ID,
-		UserID:     user.PublicID,
+		UserID:     user.ID,
 		Token:      newRefreshToken,
 		DeviceName: refreshTokenModel.DeviceName,
 		IPAddress:  refreshTokenModel.IPAddress,
 		ExpiresAt:  jwt.TimeFunc().Add(time.Duration(config.AppCfg().JWTRefreshKeyExpireHourCount) * time.Hour),
-		UpdatedAt:  jwt.TimeFunc(),
 	})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -256,7 +282,7 @@ func RefreshToken(c *fiber.Ctx) error {
 
 func generateAccessToken(user *model.User) (string, error) {
 	claims := jwt.MapClaims{
-		"sub":   user.PublicID,
+		"sub":   user.ID,
 		"email": user.Email,
 		"role":  user.Role,
 		"exp":   jwt.TimeFunc().Add(time.Duration(config.AppCfg().JWTAccessKeyExpireMinutesCount) * time.Minute).Unix(),
@@ -269,7 +295,7 @@ func generateAccessToken(user *model.User) (string, error) {
 
 func generateRefreshToken(user *model.User) (string, error) {
 	claims := jwt.MapClaims{
-		"sub":  user.PublicID,
+		"sub":  user.ID,
 		"role": user.Role,
 		"exp":  jwt.TimeFunc().Add(time.Duration(config.AppCfg().JWTRefreshKeyExpireHourCount) * time.Hour).Unix(),
 		"iat":  jwt.TimeFunc().Unix(),
